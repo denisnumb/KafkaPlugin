@@ -3,33 +3,45 @@ package denisnumb.kafkaplugin
 import com.intellij.openapi.ui.Messages
 import com.intellij.util.ui.JBUI
 import java.awt.GridBagConstraints
-import javax.swing.Icon
-import javax.swing.JButton
-import javax.swing.JPanel
-import javax.swing.JTextField
+import com.intellij.ui.components.JBTabbedPane
+import javax.swing.*
 
 class KafkaToolWindow {
     val content = JPanel()
+    private val tabbedPane = JBTabbedPane()
 
     init {
-        val textField = JTextField(20) // Устанавливаем начальную ширину поля ввода
-        textField.text = "Title" // Placeholder text
+        tabbedPane.addTab("Получить", initGetDataPane())
+        tabbedPane.addTab("Отправить", initSendDataPane())
+
+        content.add(tabbedPane)
+    }
+
+    private fun initGetDataPane(): JPanel {
+        val panel = JPanel()
+
+        return panel
+    }
+
+    private fun initSendDataPane(): JPanel {
+        val panel = JPanel()
+
+        val textField = JTextField(20)
+        textField.text = "Title"
 
         val button = JButton("Send")
 
-        // Настраиваем GridBagConstraints для textField
         val textFieldConstraints = GridBagConstraints()
         textFieldConstraints.gridx = 0
         textFieldConstraints.gridy = 0
         textFieldConstraints.fill = GridBagConstraints.HORIZONTAL
         textFieldConstraints.weightx = 1.0
-        textFieldConstraints.insets = JBUI.insets(5) // Отступы
+        textFieldConstraints.insets = JBUI.insets(5)
 
-        // Настраиваем GridBagConstraints для button
         val buttonConstraints = GridBagConstraints()
         buttonConstraints.gridx = 1
         buttonConstraints.gridy = 0
-        buttonConstraints.insets = JBUI.insets(5) // Отступы
+        buttonConstraints.insets = JBUI.insets(5)
 
 
         button.addActionListener { _ ->
@@ -39,8 +51,10 @@ class KafkaToolWindow {
                 showInfoDialog(textField.text)
         }
 
-        content.add(textField, textFieldConstraints)
-        content.add(button, buttonConstraints)
+        panel.add(textField, textFieldConstraints)
+        panel.add(button, buttonConstraints)
+
+        return panel
     }
 
     private fun showErrorDialog(text: String)
