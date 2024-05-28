@@ -11,6 +11,12 @@ repositories {
     mavenCentral()
 }
 
+dependencies {
+    implementation("org.apache.kafka:kafka-clients:3.6.0") {
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
+}
+
 // Configure Gradle IntelliJ Plugin
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
 intellij {
