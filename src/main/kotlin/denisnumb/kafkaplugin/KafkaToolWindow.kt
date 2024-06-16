@@ -111,9 +111,11 @@ class KafkaToolWindow {
             fill = GridBagConstraints.HORIZONTAL
         }
 
+        val topicsComboBox = ComboBox(userSettings.defaultTopics.toTypedArray())
         val topicSendField = JTextField(20)
         val headerField = JTextField(20)
         val keyField = JTextField(20)
+        val messagesComboBox = ComboBox(userSettings.defaultMessages.toTypedArray())
         val messageField = JTextArea(10, 40)
         messageField.lineWrap = true
         messageField.wrapStyleWord = true
@@ -129,19 +131,21 @@ class KafkaToolWindow {
             panel.add(component, constraints)
         }
 
-        addLabeledComponent("Введите имя топика:", topicSendField, 0, 0)
-        addLabeledComponent("Введите заголовок:", headerField, 0, 1)
-        addLabeledComponent("Введите ключ:", keyField, 0, 2)
-        addLabeledComponent("Введите сообщение:", JScrollPane(messageField), 0, 3)
-        addLabeledComponent("Content-Type:", contentTypeComboBox, 0, 4)
+        addLabeledComponent("Пользовательские топики:", topicsComboBox, 0, 0)
+        addLabeledComponent("Введите имя топика:", topicSendField, 0, 1)
+        addLabeledComponent("Введите заголовок:", headerField, 0, 2)
+        addLabeledComponent("Введите ключ:", keyField, 0, 3)
+        addLabeledComponent("Пользовательские сообщения:", messagesComboBox, 0, 4)
+        addLabeledComponent("Введите сообщение:", JScrollPane(messageField), 0, 5)
+        addLabeledComponent("Content-Type:", contentTypeComboBox, 0, 6)
 
         constraints.gridx = 0
-        constraints.gridy = 5
+        constraints.gridy = 7
         constraints.gridwidth = 2
         constraints.anchor = GridBagConstraints.CENTER
         panel.add(messageFromFileButton, constraints)
 
-        constraints.gridy = 6
+        constraints.gridy = 8
         panel.add(sendDataButton, constraints)
 
         messageFromFileButton.addActionListener {
@@ -161,6 +165,14 @@ class KafkaToolWindow {
                 message = messageField.text,
                 contentType = contentTypeComboBox.selectedItem?.toString() ?: "text/plain"
             )
+        }
+
+        topicsComboBox.addActionListener {
+            topicSendField.text = topicsComboBox.selectedItem?.toString()
+        }
+
+        messagesComboBox.addActionListener {
+            messageField.text = messagesComboBox.selectedItem?.toString()
         }
 
         return panel

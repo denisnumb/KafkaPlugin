@@ -11,6 +11,8 @@ import com.intellij.util.xmlb.XmlSerializerUtil
 class KafkaSettings : PersistentStateComponent<KafkaSettings> {
     var serverIp: String = "localhost"
     var serverPort: Int = 9092
+    var defaultMessages: List<String> = emptyList()
+    var defaultTopics: List<String> = emptyList()
 
     override fun getState(): KafkaSettings {
         return this

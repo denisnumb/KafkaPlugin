@@ -12,6 +12,8 @@ import javax.swing.*
 class KafkaSettingsConfigurable : Configurable {
     private val serverIpField = JTextField(20)
     private val serverPortField = JTextField(20)
+    private val defaultTopicsField = JTextArea(5, 20)
+    private val defaultMessagesField = JTextArea(5, 20)
     private val mainPanel = JPanel()
 
     init {
@@ -36,6 +38,20 @@ class KafkaSettingsConfigurable : Configurable {
         constraints.gridx = 1
         panel.add(serverPortField, constraints)
 
+        constraints.gridx = 0
+        constraints.gridy = 2
+        panel.add(JLabel("Пользовательские топики:"), constraints)
+
+        constraints.gridx = 1
+        panel.add(JScrollPane(defaultTopicsField), constraints)
+
+        constraints.gridx = 0
+        constraints.gridy = 3
+        panel.add(JLabel("Пользовательские сообщения:"), constraints)
+
+        constraints.gridx = 1
+        panel.add(JScrollPane(defaultMessagesField), constraints)
+
         mainPanel.add(panel, BorderLayout.PAGE_START)
     }
 
@@ -51,19 +67,25 @@ class KafkaSettingsConfigurable : Configurable {
     override fun isModified(): Boolean {
         val settings: KafkaSettings = KafkaSettings.instance
         return serverIpField.text != settings.serverIp ||
-                serverPortField.text != settings.serverPort.toString()
+                serverPortField.text != settings.serverPort.toString() ||
+                defaultMessagesField.text != settings.defaultMessages.joinToString("\n") ||
+                defaultTopicsField.text != settings.defaultTopics.joinToString("\n")
     }
 
     override fun apply() {
         val settings: KafkaSettings = KafkaSettings.instance
         settings.serverIp = serverIpField.text
         settings.serverPort = serverPortField.text.toInt()
+        settings.defaultMessages = defaultMessagesField.text.split("\n")
+        settings.defaultTopics = defaultTopicsField.text.split("\n")
     }
 
     override fun reset() {
         val settings: KafkaSettings = KafkaSettings.instance
         serverIpField.text = settings.serverIp
         serverPortField.text = settings.serverPort.toString()
+        defaultMessagesField.text = settings.defaultMessages.joinToString("\n")
+        defaultTopicsField.text = settings.defaultTopics.joinToString("\n")
     }
 
     override fun disposeUIResources() {
