@@ -10,10 +10,15 @@ import javax.swing.*
 
 
 class KafkaSettingsConfigurable : Configurable {
-    private val serverIpField = JTextField(20)
-    private val serverPortField = JTextField(20)
-    private val defaultTopicsField = JTextArea(5, 20)
-    private val defaultMessagesField = JTextArea(5, 20)
+    private val serverIpField = JTextField(40)
+    private val serverPortField = JTextField(40)
+    private val groupField = JTextField(40)
+    private val userNameField = JTextField(40)
+    private val userPasswordField = JPasswordField(40)
+    private val pathToSSLField = JTextField(40)
+    private val passwordToSSLField = JPasswordField(40)
+    private val defaultTopicsField = JTextArea(5, 40)
+    private val defaultMessagesField = JTextArea(5, 40)
     private val mainPanel = JPanel()
 
     init {
@@ -24,33 +29,24 @@ class KafkaSettingsConfigurable : Configurable {
             fill = GridBagConstraints.HORIZONTAL
         }
 
-        constraints.gridx = 0
-        constraints.gridy = 0
-        panel.add(JLabel("IP-Адрес сервера Kafka:"), constraints)
+        fun addLabeledComponent(label: String, component: JComponent, gridx: Int, gridy: Int) {
+            constraints.gridx = gridx
+            constraints.gridy = gridy
+            panel.add(JLabel(label), constraints)
+            constraints.gridx = gridx + 1
+            panel.add(component, constraints)
+        }
 
-        constraints.gridx = 1
-        panel.add(serverIpField, constraints)
+        addLabeledComponent("IP-Адрес сервера Kafka:", serverIpField, 0, 0)
+        addLabeledComponent("Порт сервера Kafka:", serverPortField, 0, 1)
+        addLabeledComponent("Group ID:", groupField, 0, 2)
+        addLabeledComponent("Имя пользователя:", userNameField, 0, 3)
+        addLabeledComponent("Пароль:", userPasswordField, 0, 4)
+        addLabeledComponent("Путь к SSL-сертификату:", pathToSSLField, 0, 5)
+        addLabeledComponent("Пароль к SSL-сертификату:", passwordToSSLField, 0, 6)
+        addLabeledComponent("Пользовательские топики:", JScrollPane(defaultTopicsField), 0, 7)
+        addLabeledComponent("Пользовательские сообщения:", JScrollPane(defaultMessagesField), 0, 8)
 
-        constraints.gridx = 0
-        constraints.gridy = 1
-        panel.add(JLabel("Порт сервера Kafka:"), constraints)
-
-        constraints.gridx = 1
-        panel.add(serverPortField, constraints)
-
-        constraints.gridx = 0
-        constraints.gridy = 2
-        panel.add(JLabel("Пользовательские топики:"), constraints)
-
-        constraints.gridx = 1
-        panel.add(JScrollPane(defaultTopicsField), constraints)
-
-        constraints.gridx = 0
-        constraints.gridy = 3
-        panel.add(JLabel("Пользовательские сообщения:"), constraints)
-
-        constraints.gridx = 1
-        panel.add(JScrollPane(defaultMessagesField), constraints)
 
         mainPanel.add(panel, BorderLayout.PAGE_START)
     }
@@ -68,6 +64,11 @@ class KafkaSettingsConfigurable : Configurable {
         val settings: KafkaSettings = KafkaSettings.instance
         return serverIpField.text != settings.serverIp ||
                 serverPortField.text != settings.serverPort.toString() ||
+                groupField.text != settings.groupId ||
+                userNameField.text != settings.userName ||
+                userPasswordField.text != settings.userPassword ||
+                pathToSSLField.text != settings.pathToSSL ||
+                passwordToSSLField.text != settings.passwordToSSL ||
                 defaultMessagesField.text != settings.defaultMessages.joinToString("\n") ||
                 defaultTopicsField.text != settings.defaultTopics.joinToString("\n")
     }
@@ -76,6 +77,11 @@ class KafkaSettingsConfigurable : Configurable {
         val settings: KafkaSettings = KafkaSettings.instance
         settings.serverIp = serverIpField.text
         settings.serverPort = serverPortField.text.toInt()
+        settings.groupId = groupField.text
+        settings.userName = userNameField.text
+        settings.userPassword = userPasswordField.password.joinToString()
+        settings.pathToSSL = pathToSSLField.text
+        settings.passwordToSSL = passwordToSSLField.password.joinToString()
         settings.defaultMessages = defaultMessagesField.text.split("\n")
         settings.defaultTopics = defaultTopicsField.text.split("\n")
     }
@@ -84,6 +90,11 @@ class KafkaSettingsConfigurable : Configurable {
         val settings: KafkaSettings = KafkaSettings.instance
         serverIpField.text = settings.serverIp
         serverPortField.text = settings.serverPort.toString()
+        groupField.text = settings.groupId
+        userNameField.text = ""
+        userPasswordField.text = ""
+        pathToSSLField.text = ""
+        passwordToSSLField.text = ""
         defaultMessagesField.text = settings.defaultMessages.joinToString("\n")
         defaultTopicsField.text = settings.defaultTopics.joinToString("\n")
     }

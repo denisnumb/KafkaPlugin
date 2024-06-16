@@ -241,8 +241,14 @@ class KafkaToolWindow {
 
         val producerProps = Properties().apply {
             put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, address)
+            put(ProducerConfig.ACKS_CONFIG, "all")
             put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
             put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
+            put("security.protocol", "SASL_SSL")
+            put("sasl.mechanism", "SCRAM-SHA-512")
+            put("sasl.jaas.config", "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${userSettings.userName}\" password=\"${userSettings.userPassword}\";")
+            put("ssl.truststore.location", userSettings.pathToSSL)
+            put("ssl.truststore.password", userSettings.passwordToSSL)
             put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 2000)
         }
 
