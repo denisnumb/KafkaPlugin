@@ -1,19 +1,29 @@
 package denisnumb.kafkaplugin
 
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
-import com.intellij.ui.util.maximumHeight
-import io.ktor.utils.io.*
+import com.intellij.util.ui.JBUI
+import kotlinx.coroutines.*
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
+import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.serialization.StringSerializer
 import java.awt.*
 import java.io.File
-import java.io.FileWriter
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
@@ -22,138 +32,261 @@ import java.util.concurrent.TimeUnit
 import javax.swing.*
 
 
+
 class KafkaToolWindow {
+    private var gson: Gson = GsonBuilder().setPrettyPrinting().create()
+    private val tempDir = Files.createTempDirectory("kafka_messages")
+    private val userSettings = KafkaSettings.instance
+    private val address: String get() = "${userSettings.serverIp}:${userSettings.serverPort}"
+
     val content = JPanel()
-    val userSettings = KafkaSettings.instance
-    val address: String get() = "${userSettings.serverIp}:${userSettings.serverPort}"
 
     init {
-
         content.layout = BorderLayout()
-        // Создаем вкладки
         val tabbedPane = JTabbedPane()
 
-        // Вкладка для получения данных из топика
-        val receivePanel = JPanel()
-        receivePanel.layout = BoxLayout(receivePanel, BoxLayout.Y_AXIS)
-
-        val topicInputFieldGet = JTextField(20)
-        topicInputFieldGet.maximumHeight = 30
-        val getDataButton = JButton("Получить данные")
-
-        // Минимальное пространство между элементами
-        val smallGap = 5
-
-        receivePanel.add(Box.createVerticalStrut(smallGap))
-        receivePanel.add(JLabel("Введите имя топика:"))
-        receivePanel.add(topicInputFieldGet)
-        receivePanel.add(Box.createVerticalStrut(smallGap))
-        receivePanel.add(getDataButton)
-
+        val receivePanel = createReceivePanel()
         tabbedPane.addTab("Получить", receivePanel)
-
-
-        // Вкладка для отправки данных в топик
-        val sendPanel = JPanel()
-        sendPanel.layout = BoxLayout(sendPanel, BoxLayout.Y_AXIS)
-
-        val topicSendField = JTextField(20)
-        topicSendField.maximumHeight = 30
-        val messageField = JTextField(20)
-        messageField.maximumHeight = 30
-        val headerField = JTextField(20)
-        headerField.maximumHeight = 30
-        val sendDataButton = JButton("Отправить")
-
-        sendPanel.add(Box.createVerticalStrut(smallGap))
-        sendPanel.add(JLabel("Введите имя топика:"))
-        sendPanel.add(topicSendField)
-        sendPanel.add(Box.createVerticalStrut(smallGap))
-        sendPanel.add(JLabel("Введите заголовок:"))
-        sendPanel.add(headerField)
-        sendPanel.add(Box.createVerticalStrut(smallGap))
-        sendPanel.add(JLabel("Введите сообщение:"))
-        sendPanel.add(messageField)
-        sendPanel.add(Box.createVerticalStrut(smallGap))
-        sendPanel.add(sendDataButton)
-
+        val sendPanel = createSendPanel()
         tabbedPane.addTab("Отправить", sendPanel)
 
-        Thread.currentThread().contextClassLoader = null
+        content.add(tabbedPane, BorderLayout.PAGE_START)
 
+        val buttonPanel = JPanel()
+        buttonPanel.layout = FlowLayout(FlowLayout.CENTER)
+
+        val openFolderButton = JButton("Открыть папку с сообщениями")
+        openFolderButton.addActionListener {
+            openFolderInExplorer(tempDir)
+        }
+        buttonPanel.add(openFolderButton)
+
+        val openSettingsButton = JButton("Открыть настройки плагина")
+        openSettingsButton.addActionListener {
+            ShowSettingsUtil.getInstance().showSettingsDialog(ProjectManager.getInstance().openProjects.firstOrNull(), "KafkaPlugin Config")
+        }
+        buttonPanel.add(openSettingsButton)
+
+        content.add(buttonPanel, BorderLayout.SOUTH)
+    }
+
+    private fun createReceivePanel(): JPanel {
+        val panel = JPanel(GridBagLayout())
+        val constraints = GridBagConstraints().apply {
+            insets = JBUI.insets(5)
+            fill = GridBagConstraints.HORIZONTAL
+        }
+
+        val topicInputFieldGet = JTextField(20)
+        val getDataButton = JButton("Получить данные")
+
+        constraints.gridx = 0
+        constraints.gridy = 0
+        panel.add(JLabel("Введите имя топика:"), constraints)
+
+        constraints.gridx = 1
+        panel.add(topicInputFieldGet, constraints)
+
+        constraints.gridx = 0
+        constraints.gridy = 1
+        constraints.gridwidth = 2
+        constraints.anchor = GridBagConstraints.CENTER
+        panel.add(getDataButton, constraints)
 
         getDataButton.addActionListener {
-            if (topicInputFieldGet.text.isEmpty())
+            val topic = topicInputFieldGet.text
+            if (topic.isEmpty())
                 showErrorDialog("Введите топик")
-            else {
-                val props = Properties().apply {
-                    put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, address)
-                    put(ConsumerConfig.GROUP_ID_CONFIG, "your_group_id")
-                    put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
-                    put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
-                    put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-                }
-
-                val consumer = KafkaConsumer<String, String>(props)
-                val topics = listOf(topicInputFieldGet.text)
-                consumer.subscribe(topics)
-
-                val records = consumer.poll(java.time.Duration.ofMillis(1000))
-                if (records.isEmpty) {
-                    showInfoDialog("Нет данных")
-                } else {
-                    val fileName = userSettings.userFilesPath + "/" + topicInputFieldGet.text + " " + getCurrentDateTime() + ".txt"
-                    val f = File(fileName)
-
-                    f.printWriter().use { out ->
-                        records.forEach { record ->
-                            out.println("Получено сообщение: (key: ${record.key()}, value: ${record.value()}) at offset ${record.offset()}")
-                        }
-                    }
-
-                    showInfoDialog("Данные записаны в файл ${f.absolutePath}")
-                }
-                consumer.close()
-            }
+            else
+                fetchKafkaData(topic)
         }
 
+        return panel
+    }
+
+    private fun createSendPanel(): JPanel {
+        val panel = JPanel(GridBagLayout())
+        val constraints = GridBagConstraints().apply {
+            insets = JBUI.insets(5)
+            fill = GridBagConstraints.HORIZONTAL
+        }
+
+        val topicSendField = JTextField(20)
+        val headerField = JTextField(20)
+        val keyField = JTextField(20)
+        val messageField = JTextArea(10, 40)
+        messageField.lineWrap = true
+        messageField.wrapStyleWord = true
+        val sendDataButton = JButton("Отправить")
+        val messageFromFileButton = JButton("Сообщение из файла")
+        val contentTypeComboBox = ComboBox(arrayOf("text/plain", "application/json", "application/xml"))
+
+        fun addLabeledComponent(label: String, component: JComponent, gridx: Int, gridy: Int) {
+            constraints.gridx = gridx
+            constraints.gridy = gridy
+            panel.add(JLabel(label), constraints)
+            constraints.gridx = gridx + 1
+            panel.add(component, constraints)
+        }
+
+        addLabeledComponent("Введите имя топика:", topicSendField, 0, 0)
+        addLabeledComponent("Введите заголовок:", headerField, 0, 1)
+        addLabeledComponent("Введите ключ:", keyField, 0, 2)
+        addLabeledComponent("Введите сообщение:", JScrollPane(messageField), 0, 3)
+        addLabeledComponent("Content-Type:", contentTypeComboBox, 0, 4)
+
+        constraints.gridx = 0
+        constraints.gridy = 5
+        constraints.gridwidth = 2
+        constraints.anchor = GridBagConstraints.CENTER
+        panel.add(messageFromFileButton, constraints)
+
+        constraints.gridy = 6
+        panel.add(sendDataButton, constraints)
+
+        messageFromFileButton.addActionListener {
+            val fileChooser = JFileChooser()
+            val result = fileChooser.showOpenDialog(panel)
+            if (result == JFileChooser.APPROVE_OPTION) {
+                val selectedFile = fileChooser.selectedFile
+                messageField.text = selectedFile.readText()
+            }
+        }
 
         sendDataButton.addActionListener {
-            // Настройки для Kafka Producer
-            val producerProps = Properties().apply {
-                put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, address)
-                put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
-                put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
-                put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 2000)
-            }
-            // Создание Kafka Producer
-            val producer = KafkaProducer<String, String>(producerProps)
-
-            if (topicSendField.text.isEmpty() || headerField.text.isEmpty() || messageField.text.isEmpty())
-                showErrorDialog("Заполните поля")
-            else {
-                val record = ProducerRecord(topicSendField.text, headerField.text, messageField.text)
-
-                try {
-                    val future: Future<RecordMetadata> = producer.send(record)
-                    val metadata = future[2, TimeUnit.SECONDS]
-                    showInfoDialog("Message sent successfully")
-                } catch (e: Exception) {
-                    showErrorDialog(e.message.orEmpty())
-                } finally {
-                    producer.close()
-                }
-            }
+            sendKafkaMessage(
+                topic = topicSendField.text,
+                headers = headerField.text,
+                key = keyField.text,
+                message = messageField.text,
+                contentType = contentTypeComboBox.selectedItem?.toString() ?: "text/plain"
+            )
         }
 
-        // Добавляем вкладки на главный панель
-        content.add(tabbedPane, BorderLayout.CENTER)
+        return panel
+    }
+
+    private fun fetchKafkaData(topic: String) {
+        val props = Properties().apply {
+            put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, address)
+            put(ConsumerConfig.GROUP_ID_CONFIG, "your_group_id")
+            put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+            put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+            put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+        }
+
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    Thread.currentThread().contextClassLoader = null
+                    KafkaConsumer<String, String>(props).use { consumer ->
+                        consumer.subscribe(listOf(topic))
+
+                        val records = consumer.poll(Duration.ofMillis(1000))
+                        if (records.isEmpty) {
+                            SwingUtilities.invokeLater {
+                                showInfoDialog("Для топика \"$topic\" нет новых сообщений")
+                            }
+                        } else {
+                            val fileName = "$topic ${getCurrentDateTime()}.txt"
+                            val file = File("${tempDir.toFile().absolutePath}/$fileName")
+
+                            val jsonRecords = records.map { record ->
+                                val headersMap = record.headers().associate { header ->
+                                    header.key() to String(header.value())
+                                }
+                                mapOf(
+                                    "topic" to record.topic(),
+                                    "partition" to record.partition(),
+                                    "offset" to record.offset(),
+                                    "key" to record.key(),
+                                    "value" to record.value(),
+                                    "headers" to headersMap
+                                )
+                            }
+
+                            file.printWriter().use { out ->
+                                out.println(gson.toJson(jsonRecords))
+                            }
+
+                            SwingUtilities.invokeLater {
+                                showInfoDialog("Данные записаны в файл: $fileName")
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                showErrorDialog("Ошибка при выполнении операции: ${e.message}")
+            }
+        }
+    }
+
+    private fun sendKafkaMessage(topic: String, headers: String, key: String, message: String, contentType: String) {
+        if (topic.isEmpty() || message.isEmpty()) {
+            showErrorDialog("Заполните поля")
+            return
+        }
+
+        val producerProps = Properties().apply {
+            put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, address)
+            put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
+            put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
+            put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 2000)
+        }
+
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    Thread.currentThread().contextClassLoader = null
+                    val producer = KafkaProducer<String, String>(producerProps)
+
+                    val recordHeaders = headers.split(";")
+                        .mapNotNull {
+                            val keyValue = it.split(":", limit = 2)
+                            if (keyValue.size == 2) {
+                                RecordHeader(keyValue[0].trim(), keyValue[1].trim().toByteArray())
+                            } else null
+                        }.toMutableList()
+
+                    recordHeaders.add(RecordHeader("content-type", contentType.toByteArray()))
+
+                    val record = ProducerRecord(topic, null, null, key, message, recordHeaders)
+
+                    try {
+                        val future: Future<RecordMetadata> = producer.send(record)
+                        future[2, TimeUnit.SECONDS]
+                        SwingUtilities.invokeLater {
+                            showInfoDialog("Сообщение успешно отправлено")
+                        }
+                    } catch (e: Exception) {
+                        SwingUtilities.invokeLater {
+                            if (e.cause is TimeoutException)
+                                showErrorDialog("Превышено время ожидания")
+                            else
+                                showErrorDialog("Ошибка при отправке сообщения: ${e.message}")
+                        }
+                    } finally {
+                        producer.close()
+                    }
+                }
+            } catch (e: Exception) {
+                showErrorDialog("Ошибка при выполнении операции: ${e.message}")
+            }
+        }
     }
 
     private fun getCurrentDateTime(): String {
         val current = LocalDateTime.now()
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm-ss")
         return current.format(formatter)
+    }
+
+    private fun openFolderInExplorer(folder: Path) {
+        try {
+            Desktop.getDesktop().open(folder.toFile())
+        } catch (e: IOException) {
+            showErrorDialog("Не удалось открыть папку: ${e.message}")
+        }
     }
 
     private fun showErrorDialog(text: String)

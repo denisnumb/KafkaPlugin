@@ -11,7 +11,6 @@ import com.intellij.util.xmlb.XmlSerializerUtil
 class KafkaSettings : PersistentStateComponent<KafkaSettings> {
     var serverIp: String = "localhost"
     var serverPort: Int = 9092
-    var userFilesPath: String = ""
 
     override fun getState(): KafkaSettings {
         return this
